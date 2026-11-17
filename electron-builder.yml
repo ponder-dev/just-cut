@@ -1,0 +1,107 @@
+appId: com.ponderdev.justcut
+productName: Just Cut
+copyright: Copyright © PonderDev
+
+directories:
+  output: dist
+  buildResources: build
+
+files:
+  - src/**/*
+  - package.json
+  # The GPL wants its terms travelling with the binary, not just sitting in
+  # the repo for whoever thinks to look.
+  - LICENSE
+  - THIRD-PARTY-NOTICES.md
+
+# ffmpeg and ffprobe ride along beside the app rather than inside the asar,
+# because they have to be spawned as real executables. Filtered per platform
+# below, or a mac build would carry 80MB of Windows exe it can never run.
+asar: true
+
+# No update feed. Downloaded once and left alone, so it must never phone home
+# looking for a newer version.
+publish: null
+
+mac:
+  category: public.app-category.video
+  icon: build/icon.icns
+  # One download that works on both chips, the same promise the other tools
+  # make. It costs a second Electron and both sets of mac ffmpeg binaries,
+  # which is the price of not asking people what is inside their computer.
+  target:
+    - target: dmg
+      arch: [universal]
+    # Just Tool Belt installs from the zip: a disk image cannot be mounted
+    # reliably from a background process.
+    - target: zip
+      arch: [universal]
+  artifactName: JustCut-mac.${ext}
+  extraResources:
+    - from: vendor/ffmpeg
+      to: ffmpeg
+      filter: ["*-darwin-*"]
+  # The universal merger refuses to guess what to do with a Mach-O binary that
+  # appears in both sub-builds. Ours are named by arch and both sub-builds
+  # carry the identical set, so take one copy through untouched rather than
+  # trying to lipo them into each other.
+  x64ArchFiles: "Contents/Resources/ffmpeg/*"
+  # Unsigned: a Developer ID costs more per year than a free app will make.
+  # Users get past Gatekeeper with right-click then Open.
+  identity: null
+  notarize: false
+  darkModeSupport: true
+
+dmg:
+  # No version in the filename, so download links keep working across releases.
+  title: Just Cut
+  artifactName: JustCut-mac.${ext}
+
+linux:
+  icon: build/icon.png
+  # Set here rather than only under appImage, so every linux target inherits it.
+  # A target with no artifactName falls through to electron-builder's default,
+  # which carries ${version}, and a versioned filename breaks the download links
+  # on ponderdev.com the moment a new release goes out.
+  artifactName: JustCut-linux-x86_64.${ext}
+  category: AudioVideo
+  synopsis: Cut a video down and put the pieces in order
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: tar.gz
+      arch: [x64]
+  extraResources:
+    - from: vendor/ffmpeg
+      to: ffmpeg
+      filter: ["*-linux-*"]
+
+appImage:
+  artifactName: JustCut-linux-x86_64.${ext}
+
+win:
+  icon: build/icon.png
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+    # Just Tool Belt installs from the zip: the portable exe unpacks itself to
+    # a temporary folder on every run, so it cannot be installed.
+    - target: zip
+      arch: [x64]
+  artifactName: JustCut-windows.${ext}
+  extraResources:
+    - from: vendor/ffmpeg
+      to: ffmpeg
+      filter: ["*-win32-*"]
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: JustCut-windows-setup.${ext}
+  shortcutName: Just Cut
+
+portable:
+  artifactName: JustCut-windows-portable.${ext}

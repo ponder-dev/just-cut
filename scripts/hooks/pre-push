@@ -1,0 +1,50 @@
+#!/bin/sh
+#
+# Refuses to move or delete a tag that the remote already has.
+#
+# A tag push rebuilds the release assets, and replacing an asset resets its
+# download counter to zero. There is no way to put the number back. Just JPEG
+# lost its figures that way, and the release workflow has a matching guard on
+# the server side, because a hook only protects the machine it is installed on.
+#
+# Install with scripts/install-hooks.sh. Git hooks are not tracked by git, so
+# a fresh clone has none and this has to be run once per checkout.
+#
+# If a tag genuinely has to move, delete the release and its assets first, on
+# purpose, and then use --no-verify.
+
+zero='0000000000000000000000000000000000000000'
+status=0
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  case "$remote_ref" in
+    refs/tags/*) ;;
+    *) continue ;;
+  esac
+
+  tag=${remote_ref#refs/tags/}
+
+  # Nothing on the remote yet, so this is a new tag and is the ordinary case.
+  [ "$remote_sha" = "$zero" ] && continue
+
+  if [ "$local_sha" = "$zero" ]; then
+    echo "pre-push: refusing to delete the tag $tag."
+    status=1
+  elif [ "$local_sha" != "$remote_sha" ]; then
+    echo "pre-push: refusing to move the tag $tag."
+    echo "  remote: $remote_sha"
+    echo "  local:  $local_sha"
+    status=1
+  fi
+done
+
+if [ "$status" -ne 0 ]; then
+  echo
+  echo "  Moving a tag rebuilds the release assets, and replacing an asset resets"
+  echo "  its download counter to zero. That cannot be undone."
+  echo
+  echo "  Tag the next version instead. If this really is what you want, delete"
+  echo "  the release first and then push with --no-verify."
+fi
+
+exit "$status"

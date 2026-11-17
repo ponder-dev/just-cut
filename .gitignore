@@ -1,0 +1,25 @@
+node_modules/
+dist/
+# ffmpeg and ffprobe are large and are not ours to redistribute through our
+# own git history. scripts/fetch-ffmpeg.mjs pulls them, the build packs them.
+vendor/
+# Generated from THIRD-PARTY-NOTICES.md + licenses/*.txt by make-licenses.mjs.
+# Committed on purpose so the packaged app always carries it, but regenerated
+# rather than edited.
+# build/icon.png is TRACKED, deliberately, and it used to be ignored here.
+# electron-builder points win and linux at it, `npm run dist` does not run
+# `npm run icon` first, and nothing else regenerates it. So a fresh checkout
+# built for Windows or Linux had no icon at all and said nothing about it.
+# icon.icns is tracked for the same reason on mac; this just makes the two
+# platforms consistent. The iconset stays ignored because the icns contains it.
+build/icon.png
+build/icon.icns
+build/icon.iconset/
+#
+# The vector is the single source of truth and the only icon artifact in git.
+# `npm run icon` rebuilds all three from it, and the release workflow runs that
+# per platform before packaging: mac gets the icns from iconutil, linux and
+# windows get the png. Nothing here is committed that a build can produce.
+.DS_Store
+._*
+*.log
