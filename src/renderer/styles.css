@@ -1,0 +1,672 @@
+/* Just Cut's own editor: the grid, the frame, the transport, the timeline and
+   its blocks, grips, joins, lane and playhead, the clip strip, the tray, the
+   side and its foot, the dialogs, the join picker and the keys. Everything
+   the family shares (the palette, the page, buttons, links, fields, the start
+   block, the run part, the error line, the veil and the footer) comes from
+   kit/kit.css, linked before this file. Every colour here is a kit token, and
+   tints are mixed from them rather than being new values. */
+
+/* --------------------------------------------------------------- editor --- */
+
+.editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 304px;
+  gap: 24px;
+  align-items: start;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+@media (max-width: 900px) {
+  .editor { grid-template-columns: minmax(0, 1fr); }
+}
+
+.stage { min-width: 0; }
+
+/* The preview box is the shape of the finished video, so the crop is visible
+   rather than described. --frame-ar is a plain number set from app.js. */
+.frame {
+  aspect-ratio: var(--frame-ar, 1.7778);
+  width: min(100%, calc(42vh * var(--frame-ar, 1.7778)));
+  margin: 0 auto;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+#video { width: 100%; height: 100%; display: block; object-fit: contain; background: var(--bg); }
+.frame.crop #video {
+  object-fit: cover;
+  object-position: var(--pan-x, 50%) var(--pan-y, 50%);
+}
+
+.transport {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 14px 0 22px;
+}
+.time { color: var(--muted); flex: none; }
+
+/* ------------------------------------------------------------- timeline --- */
+
+.tl-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+.tl-tools { display: flex; align-items: center; gap: 10px; flex: none; }
+.zoom-label { color: var(--muted); font-size: 12px; }
+#zoom { width: 96px; flex: none; }
+
+.tl-scroll {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 12px 12px 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.tl-scroll.over { border-color: var(--accent); }
+
+/* The timeline's own scroll bar, taller than the window's and on a track you
+   can see, because a long edit lives off to the side and this is the way to
+   it. The shared rule further down is near invisible on this panel, which is
+   how it was looked for and not found (walk, 2026-11-16). */
+.tl-scroll::-webkit-scrollbar { height: 14px; }
+.tl-scroll::-webkit-scrollbar-track {
+  background: var(--panel-2);
+  border-radius: var(--radius-pill);
+  border: 3px solid var(--panel);
+}
+.tl-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--muted) 55%, var(--panel-2));
+  border: 3px solid var(--panel);
+}
+.tl-scroll::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* --zoom is pixels per second of finished video, and --span is one clip's
+   length in those seconds. Both are genuinely dynamic, so they are custom
+   properties rather than written-out widths. */
+.tl { position: relative; width: max-content; min-width: 100%; }
+.track { display: flex; align-items: stretch; height: 86px; }
+
+.clip {
+  position: relative;
+  flex: none;
+  touch-action: none;
+  width: calc(var(--span, 1) * var(--zoom, 34) * 1px);
+  min-width: 88px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  /* clip, not hidden: hidden would make the block a scroll box of its own and
+     the sticky corner would stick to the block instead of the timeline. */
+  overflow: clip;
+  cursor: grab;
+  transition: border-color .12s, box-shadow .12s;
+}
+.clip:hover { border-color: var(--muted); }
+.clip.sel { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.clip.lifted { opacity: .35; }
+.tl.carrying, .tl.carrying .clip { cursor: grabbing; }
+
+/* The block being carried, following the pointer. Built fresh rather than
+   cloned, and placed with custom properties like everything else here. */
+.clip.ghost {
+  position: fixed;
+  left: 0; top: 0;
+  z-index: 5;
+  pointer-events: none;
+  opacity: .9;
+  border-color: var(--accent);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--bg) 70%, transparent);
+  transform: translate(var(--gx, 0px), var(--gy, 0px)) rotate(-1.5deg);
+}
+.clip.drop-before { box-shadow: inset 4px 0 0 var(--accent-hot); }
+.clip.drop-after { box-shadow: inset -4px 0 0 var(--accent-hot); }
+
+.clip-body { padding: 10px 14px; pointer-events: none; }
+.clip-name {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 560;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.clip-facts { margin: 4px 0 0; font-size: 11px; color: var(--muted); }
+/* A sped-up or slowed block wears its speed, so it shows without selecting it. */
+.clip-speed {
+  pointer-events: none;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 22%, var(--panel-2));
+  color: var(--accent-hot);
+}
+.clip-speed[hidden] { display: none; }
+/* Room for the can only while it shows, so a short block keeps its name. */
+.clip:hover .clip-name, .clip.sel .clip-name { padding-right: 30px; }
+.clip:has(.clip-speed:not([hidden])) .clip-name { padding-right: 36px; }
+.clip:hover:has(.clip-speed:not([hidden])) .clip-name,
+.clip.sel:has(.clip-speed:not([hidden])) .clip-name { padding-right: 66px; }
+.clip-bar {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 4px;
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* Trim handles. Wide enough to grab without hunting for them. */
+.grip {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 10px;
+  cursor: ew-resize;
+  background: color-mix(in srgb, var(--line) 70%, transparent);
+}
+.grip:hover, .grip.pulling { background: var(--accent); }
+.grip-in { left: 0; }
+.grip-out { right: 0; }
+
+/* The join between two clips: a chip over the seam that shows its kind, so
+   the joins can be seen without clicking around (walk, 2026-11-16). A
+   fade or a slide is filled, so a finished edit shows its joins at a glance. */
+.tr {
+  flex: none;
+  align-self: center;
+  width: 58px;
+  margin: 0 -10px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 0 5px;
+  font-family: var(--font);
+  line-height: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid color-mix(in srgb, var(--text) 25%, transparent);
+  border-radius: 10px;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--bg) 60%, transparent);
+  cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+.tr:hover { border-color: var(--accent); }
+.tr-fade, .tr-slide {
+  color: var(--on-accent);
+  background: color-mix(in srgb, var(--accent) 70%, var(--panel));
+  border-color: var(--accent);
+}
+.tr-mark {
+  width: 18px; height: 12px;
+  border-radius: 3px;
+  border: 1.5px solid currentColor;
+}
+.tr-cut .tr-mark { background: linear-gradient(90deg, transparent 0 46%, currentColor 46% 54%, transparent 54%); }
+.tr-fade .tr-mark { background: linear-gradient(90deg, transparent, currentColor); }
+.tr-slide .tr-mark { background: linear-gradient(90deg, transparent 0 50%, currentColor 50%); border-radius: 3px 6px 6px 3px; }
+
+/* The picker of the three, under the chip. Each has a moving picture: two
+   colours, the second arriving the way that join brings in the next clip. */
+.join-picker {
+  position: fixed;
+  left: var(--jx, 0px);
+  top: var(--jy, 0px);
+  transform: translate(-50%, 8px);
+  z-index: 40;
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--bg) 70%, transparent);
+}
+.join-picker[hidden] { display: none; }
+.jp-opt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  font-family: var(--font);
+  line-height: inherit;
+  font-size: 12px;
+  font-weight: 560;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid transparent;
+  border-radius: 9px;
+  cursor: pointer;
+}
+.jp-opt:hover { border-color: var(--line); }
+.jp-opt.on { border-color: var(--accent); color: var(--accent-hot); }
+.jp-pic {
+  position: relative;
+  width: 56px; height: 34px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--muted);
+}
+.jp-pic::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--accent);
+}
+.jp-cut::after { animation: jp-cut 2s steps(1) infinite; }
+.jp-fade::after { animation: jp-fade 2s ease-in-out infinite; }
+.jp-slide::after { animation: jp-slide 2s ease-in-out infinite; }
+@keyframes jp-cut { 0% { opacity: 0; } 50% { opacity: 1; } }
+@keyframes jp-fade { 0%, 25% { opacity: 0; } 60%, 100% { opacity: 1; } }
+@keyframes jp-slide { 0%, 25% { transform: translateX(100%); } 60%, 100% { transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .jp-pic::after { animation: none; }
+  .jp-cut::after { clip-path: inset(0 0 0 50%); }
+  .jp-fade::after { background: linear-gradient(90deg, transparent, var(--accent)); }
+  .jp-slide::after { transform: translateX(50%); }
+}
+
+/* The second video for a seam's fade or slide. */
+.frame { position: relative; }
+#video-b {
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+  object-fit: contain;
+  background: var(--bg);
+  opacity: 0;
+  pointer-events: none;
+}
+.frame.crop #video-b { object-fit: cover; object-position: var(--pan-x, 50%) var(--pan-y, 50%); }
+.frame.seam-fade #video-b { animation: seam-fade var(--seam, .5s) linear forwards; }
+.frame.seam-slide #video-b { animation: seam-slide var(--seam, .5s) ease-out forwards; }
+@keyframes seam-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes seam-slide { from { opacity: 1; transform: translateX(100%); } to { opacity: 1; transform: none; } }
+
+/* The scrub strip. Its ticks are one per --tick pixels, set per block from
+   that block's own scale, since a short block is held wider than the zoom. */
+.lane {
+  position: relative;
+  height: 30px;
+  margin-top: 6px;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.lane:focus { outline: none; }
+.seg {
+  position: absolute;
+  top: 4px; bottom: 4px;
+  left: var(--x, 0px);
+  width: var(--w, 0px);
+  border-radius: 6px;
+  background:
+    repeating-linear-gradient(90deg, var(--line) 0 1px, transparent 1px var(--tick, 34px)) left bottom / 100% 8px no-repeat,
+    var(--panel-2);
+  pointer-events: none;
+}
+.lane:hover .seg, .lane.dragging .seg {
+  background:
+    repeating-linear-gradient(90deg, var(--muted) 0 1px, transparent 1px var(--tick, 34px)) left bottom / 100% 8px no-repeat,
+    color-mix(in srgb, var(--accent) 10%, var(--panel-2));
+}
+.seg-at {
+  position: absolute;
+  left: 6px; top: 1px;
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.playhead {
+  position: absolute;
+  top: 0; bottom: 0;
+  left: -1px;
+  width: 2px;
+  background: var(--accent-hot);
+  transform: translateX(var(--ph, 0px));
+  pointer-events: none;
+  z-index: 2;
+}
+/* The handle on the strip, so it is plain where to grab. */
+.ph-knob {
+  position: absolute;
+  bottom: 4px; left: -6px;
+  width: 14px; height: 22px;
+  border-radius: 5px;
+  background: var(--accent-hot);
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--bg) 60%, transparent);
+}
+.lane.dragging ~ .playhead .ph-knob { background: var(--text); }
+
+/* Split, waiting beside the handle where the playhead stopped. */
+.cut-here {
+  position: absolute;
+  bottom: 4px;
+  left: 0;
+  z-index: 3;
+  transform: translateX(calc(var(--ph, 0px) + 12px));
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 0;
+  background: var(--accent);
+  color: var(--on-accent);
+  cursor: pointer;
+}
+.cut-here:hover { background: var(--accent-hot); }
+.cut-here.flip { transform: translateX(calc(var(--ph, 0px) - 100% - 12px)); }
+
+/* --------------------------------------------------------------- panels --- */
+
+/* The side runs the full height of the editor, so Export sits at its foot,
+   level with the bottom of the main column (decided 2026-11-20), as the kit's
+   studio layout puts the export spot in every video tool. */
+.side { min-width: 0; align-self: stretch; display: flex; flex-direction: column; }
+.side > .side-foot { margin-top: auto; }
+/* One column (at its least width, and on an 800 wide screen): the side's parts
+   sit straight in the editor's grid, so the Export foot can stick to the
+   window's foot from the top of the page down. Inside the side it could not
+   rise above the side, which on a short window starts below the fold
+   (decided 2026-11-20). */
+@media (max-width: 900px) {
+  .side { display: contents; }
+}
+
+.ends {
+  display: flex;
+  justify-content: space-between;
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.name { margin: 0; font-weight: 560; word-break: break-all; }
+
+/* Says the panel above is about the one selected block, not the whole video. */
+.eyebrow {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 560;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Quick speeds under the slider. The one matching the clip is lit. */
+.picks { display: flex; gap: 6px; margin-top: 10px; }
+.pick {
+  flex: 1;
+  font-family: var(--font);
+  font-weight: inherit;
+  line-height: inherit;
+  font-size: 12px;
+  padding: 4px 0;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition: background .12s, border-color .12s;
+}
+.pick:hover { background: var(--panel-2); }
+.pick.on { border-color: var(--accent); color: var(--accent); }
+
+.check { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-weight: 400; }
+.check:last-child { margin-bottom: 0; }
+.check input { accent-color: var(--accent); width: 15px; height: 15px; flex: none; }
+
+/* Undo and redo: two arrows at the head of the timeline, kit icons drawn at
+   the size and weight they always had here. */
+.history { display: flex; gap: 4px; }
+.hist-icon { width: 17px; height: 17px; stroke-width: 2; }
+/* The trash can on a block: shown on hover and on the selected block, and
+   always there for the keyboard. 26px square so it is easy to hit. */
+.clip-corner {
+  position: absolute;
+  top: 5px; left: 12px; right: 14px;
+  height: 26px;
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+.clip-corner-stick {
+  position: sticky;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.clip-trash {
+  pointer-events: auto;
+  flex: none;
+  width: 26px; height: 26px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  /* Solid, with a soft edge, so a name running under it on a long block
+     fades out instead of showing through. */
+  background: var(--panel);
+  border-color: color-mix(in srgb, var(--text) 22%, transparent);
+  box-shadow: 0 0 6px 5px var(--panel-2);
+  color: var(--text);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .12s, color .12s, background .12s;
+}
+.clip-trash svg { width: 15px; height: 15px; stroke-width: 2; }
+.clip:hover .clip-trash, .clip.sel .clip-trash, .clip-trash:focus-visible { opacity: 1; }
+.clip-trash:hover { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 55%, transparent); }
+.tl.carrying .clip-trash, .clip.ghost .clip-trash { opacity: 0; }
+
+/* The question before a clip is removed. */
+.ask {
+  max-width: 360px;
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--text);
+}
+.ask::backdrop { background: color-mix(in srgb, var(--bg) 60%, transparent); }
+.ask-title { margin: 0; font-weight: 560; }
+.ask-check { margin: 16px 0 0; font-size: 13px; }
+.ask-buttons { justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.scrub { flex: 1; min-width: 0; }
+
+/* ------------------------------------------------------------- the tray --- */
+
+/* A bin of picture tiles (walk, 2026-11-16), sized for the side panel. */
+.tray-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 10px;
+}
+.tray-list:empty { display: none; }
+.tile {
+  position: relative;
+  min-width: 0;
+  cursor: grab;
+  touch-action: none;
+  border-radius: 9px;
+}
+.tile.lifted { opacity: .35; }
+.tile-pic {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  transition: border-color .12s;
+}
+.tile:hover .tile-pic { border-color: var(--muted); }
+.tile-pic img { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.tile-film {
+  width: 30px; height: 30px;
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+.tile-len {
+  position: absolute;
+  right: 5px; bottom: 5px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  color: var(--text);
+}
+.tile .what {
+  margin: 6px 0 0;
+  font-size: 12px;
+  font-weight: 560;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tile-range { margin: 1px 0 0; font-size: 11px; color: var(--muted); }
+.tile-actions {
+  position: absolute;
+  top: 5px; right: 5px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity .12s;
+}
+.tile:hover .tile-actions, .tile:focus-within .tile-actions { opacity: 1; }
+.tile-btn {
+  width: 24px; height: 24px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--text) 22%, transparent);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+.tile-btn svg { width: 14px; height: 14px; stroke-width: 2.2; }
+.tile-btn:hover { border-color: var(--accent); color: var(--accent-hot); }
+.tile-btn.tray-out:hover { border-color: var(--bad); color: var(--bad); }
+.tile.pending { cursor: default; color: var(--muted); }
+.tile.pending .tile-pic { border-style: dashed; }
+.tile.pending .spin { margin: 0; width: 18px; height: 18px; }
+.spin {
+  display: inline-block;
+  width: 12px; height: 12px;
+  margin-right: 8px;
+  vertical-align: -1px;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation-duration: 2.4s; } }
+/* A little taller than its words, so the empty tray reads as a place to drop
+   a block (decided 2026-11-18). It still grows with what is in it. */
+.tray { min-height: 150px; }
+.tray.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--panel)); }
+
+/* An empty timeline, when every block is in the tray. */
+.track:empty::before {
+  content: attr(data-empty);
+  align-self: center;
+  padding-left: 16px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.tl-scroll.drop-here { border-color: var(--accent); }
+
+/* Start again, and the small settings under it. */
+.after-export { margin-top: 14px; }
+.mini { margin-top: 12px; font-size: 13px; color: var(--muted); }
+.mini summary { cursor: pointer; width: max-content; }
+.mini summary:hover { color: var(--text); }
+.mini .check { margin: 10px 0 0; color: var(--text); }
+
+/* Help: the "?" by the timeline and its list of keys. */
+.help-btn { font-weight: 700; line-height: 1; min-width: 32px; }
+/* A long folder path in a failure has no spaces to break at. */
+#run p, #error { overflow-wrap: anywhere; }
+.help-keys { max-width: 440px; }
+.keys { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 16px 0 0; font-size: 13px; }
+.keys dt { font-weight: 560; }
+.keys dd { margin: 0; color: var(--muted); }
+
+/* Export, the run part under it and Start again, pinned to the bottom of
+   the scrolling area; the panel above scrolls under it if it has to. */
+.side-foot {
+  position: sticky;
+  bottom: -20px;            /* #app's bottom padding, so it sits on the edge */
+  z-index: 4;
+  padding: 14px 0 20px;
+  background: var(--bg);
+  box-shadow: 0 -14px 14px -14px color-mix(in srgb, var(--bg) 90%, black);
+}
+.side-foot .after-export {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 18px;
+  margin-top: 12px;
+}
+.side-foot .after-export .mini { margin-top: 0; }
+
+/* "This clip", under the timeline: the block's name and range on the left,
+   its speed on the right, two rows at most. */
+.clip-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+  gap: 8px 24px;
+  align-items: start;
+  margin-top: 14px;
+  padding: 12px 18px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.clip-strip[hidden] { display: none; }
+.clip-strip .eyebrow { margin-bottom: 2px; }
+.clip-strip .name { word-break: normal; overflow-wrap: anywhere; }
+.clip-strip .hint.mono { margin-top: 4px; }
+.cs-speed > label { display: block; font-weight: 560; margin-bottom: 6px; }
+.cs-speed-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cs-speed-row input[type=range] { flex: 1 1 110px; min-width: 90px; }
+.cs-speed-row .picks { margin-top: 0; flex: none; }
+.cs-speed-row .pick { flex: none; padding: 4px 9px; }
+.cs-speed .hint { margin-top: 6px; }
+@media (max-width: 760px) {
+  .clip-strip { grid-template-columns: minmax(0, 1fr); }
+}
+/* On a short window (a 1280x720 laptop) the preview gives up a little height
+   so the timeline and "This clip" fit under it without scrolling. */
+@media (max-height: 800px) {
+  .frame { width: min(100%, calc(37vh * var(--frame-ar, 1.7778))); }
+  .transport { margin: 10px 0 16px; }
+}
+
+/* Once a run is done or has failed, the card is the last thing in the side
+   foot; its bottom padding shrinks so the side stays inside the window. */
+#side-foot[data-run-state="done"],
+#side-foot[data-run-state="failed"] { padding-bottom: var(--space-1); }

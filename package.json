@@ -1,0 +1,61 @@
+{
+  "name": "justcut",
+  "productName": "Just Cut",
+  "version": "1.0.0",
+  "description": "Cut a video down and put the pieces in order. Trim, split, reorder and reframe, entirely on your own machine.",
+  "author": {
+    "name": "PonderDev",
+    "url": "https://ponderdev.com"
+  },
+  "homepage": "https://ponderdev.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ponder-dev/just-cut.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ponder-dev/just-cut/issues"
+  },
+  "license": "GPL-3.0-or-later",
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "src/main.cjs",
+  "desktopName": "com.ponderdev.justcut.desktop",
+  "bin": {
+    "justcut": "src/cli.cjs"
+  },
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "test": "node test/plan.test.cjs && node test/render.test.cjs && node test/safety.test.cjs && node test/cancel.test.cjs && node test/cli.test.cjs && node test/contract.test.cjs && node test/skill.test.cjs && node test/linux-launcher.test.cjs",
+    "test:cli": "node test/cli.test.cjs && node test/contract.test.cjs",
+    "test:window": "node scripts/electron.cjs test/window.test.cjs",
+    "test:all": "npm test && npm run test:window",
+    "fetch-ffmpeg": "node scripts/fetch-ffmpeg.mjs",
+    "licences": "node scripts/make-licenses.mjs",
+    "icon": "npm run icon:svg && npm run icon:raster && npm run icon:icns",
+    "cli": "node src/cli.cjs",
+    "dist:mac": "npm run icon && npm run licences && electron-builder --mac",
+    "dist:win": "npm run licences && electron-builder --win",
+    "dist:linux": "npm run icon:ensure && npm run licences && electron-builder --linux",
+    "dist": "npm run icon && npm run licences && electron-builder --mac --win --linux",
+    "icon:png": "npm run icon:svg && npm run icon:raster",
+    "icon:ensure": "node scripts/ensure-icon.cjs",
+    "icon:svg": "node scripts/make-icon.mjs",
+    "icon:raster": "node scripts/electron.cjs scripts/icons.cjs",
+    "icon:icns": "./scripts/make-icns.sh",
+    "postinstall": "node scripts/link-skill.cjs"
+  },
+  "devDependencies": {
+    "electron": "^43.3.0",
+    "electron-builder": "^26.15.3"
+  },
+  "files": [
+    "src/**/*",
+    "LICENSE",
+    "THIRD-PARTY-NOTICES.md",
+    "licenses/**/*",
+    "agents/**/*",
+    "scripts/link-skill.cjs"
+  ]
+}

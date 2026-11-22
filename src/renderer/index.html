@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!-- Strict on purpose. Nothing loads from the network, so nothing needs to be
+     allowed from it. style-src has no 'unsafe-inline': that permission is the
+     exact thing this policy exists to refuse, so every visual state here is a
+     class or a custom property set from the stylesheet. media-src has to name
+     file: because the preview plays the originals where they already sit. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; media-src 'self' justcut-media:; img-src 'self' data:;">
+<title>Just Cut</title>
+<link rel="stylesheet" href="kit/kit.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- Space for the mac traffic lights, which sit over the content. -->
+<div class="titlebar"></div>
+
+<div id="app">
+
+  <!-- Nothing loaded yet: the kit's start block, filled in by app.js. -->
+  <div id="start"></div>
+
+  <!-- Something loaded. -->
+  <div id="editor" class="editor" hidden>
+
+    <div class="stage">
+      <div class="frame" id="frame">
+        <video id="video" preload="auto" playsinline></video>
+        <!-- Laid over the preview for a fade or a slide while a seam plays. -->
+        <video id="video-b" preload="auto" playsinline muted aria-hidden="true"></video>
+      </div>
+
+      <div class="transport">
+        <button type="button" id="play" class="btn btn-ghost btn-tight">Play</button>
+        <input type="range" id="scrub" class="scrub" min="0" max="2000" step="1" value="0" aria-label="Playhead">
+        <span class="mono time" id="time">0:00 / 0:00</span>
+      </div>
+
+      <div class="tl-head">
+        <h3>Timeline</h3>
+        <div class="tl-tools">
+          <div class="history" role="group" aria-label="Undo and redo">
+            <button type="button" id="undo" class="btn btn-ghost btn-tight btn-icon-sm" aria-label="Undo" disabled>
+              <i data-icon="undo" class="hist-icon"></i>
+            </button>
+            <button type="button" id="redo" class="btn btn-ghost btn-tight btn-icon-sm" aria-label="Redo" disabled>
+              <i data-icon="redo" class="hist-icon"></i>
+            </button>
+          </div>
+          <button type="button" id="split" class="btn btn-ghost btn-tight">Split here</button>
+          <button type="button" id="add" class="btn btn-ghost btn-tight">Add videos</button>
+          <button type="button" id="add-folder" class="btn btn-ghost btn-tight" hidden>Add a folder</button>
+          <button type="button" id="help" class="btn btn-ghost btn-tight btn-icon-sm help-btn" aria-label="Moves and keys" title="Moves and keys (?)">?</button>
+          <label class="zoom-label" for="zoom">Zoom</label>
+          <input type="range" id="zoom" min="6" max="140" step="1" value="34" aria-label="Timeline zoom">
+        </div>
+      </div>
+
+      <div class="tl-scroll" id="tl-scroll">
+        <div class="tl" id="tl">
+          <div class="track" id="track"></div>
+          <!-- The strip under the blocks: drag along it to move through the
+               video, and the Split button waits where you stop. -->
+          <div class="lane" id="lane" title="Drag along here to move through the video"></div>
+          <div class="playhead" id="playhead"><span class="ph-knob"></span></div>
+          <button type="button" id="cut-here" class="cut-here" hidden>Split</button>
+        </div>
+      </div>
+
+      <!-- The selected block's own settings, next to the block (walk,
+           2026-11-16: "the this clip section should go under the timeline"). -->
+      <section class="clip-strip" id="clip-panel" hidden>
+        <div class="cs-info">
+          <p class="eyebrow">This clip</p>
+          <p class="name" id="clip-name"></p>
+          <p class="hint mono" id="clip-facts"></p>
+        </div>
+        <div class="cs-speed">
+          <label for="speed">Speed in the finished video</label>
+          <div class="cs-speed-row">
+            <input type="range" id="speed" min="25" max="400" step="5" value="100">
+            <span class="pill" id="speed-read">1x</span>
+            <div class="picks" id="speed-picks" role="group" aria-label="Quick speeds">
+              <button type="button" class="pick" data-speed="0.5">0.5x</button>
+              <button type="button" class="pick" data-speed="1">1x</button>
+              <button type="button" class="pick" data-speed="1.5">1.5x</button>
+              <button type="button" class="pick" data-speed="2">2x</button>
+            </div>
+          </div>
+          <p class="hint" id="speed-note" aria-live="polite"></p>
+        </div>
+      </section>
+
+    </div>
+
+    <aside class="side">
+
+      <!-- The tray: where added files wait, and where a block can be set aside
+           and brought back. Nothing in it goes into the finished video. -->
+      <section class="k-section tray" id="tray">
+        <div class="k-field">
+          <label>Tray</label>
+          <ul class="tray-list" id="tray-list"></ul>
+          <p class="hint" id="tray-hint"></p>
+        </div>
+      </section>
+
+      <!-- Settings for the whole export. Framing is one setting for all of it
+           (decided 2026-11-16: "per video framing is good"). -->
+      <section class="k-section" id="whole-video">
+        <div class="k-field">
+          <p class="eyebrow">Whole video</p>
+          <label for="format">Shape of the finished video</label>
+          <select id="format">
+            <option value="source">Same as the first clip</option>
+            <option value="vertical">Upright, 9:16</option>
+            <option value="square">Square, 1:1</option>
+            <option value="wide">Wide, 16:9</option>
+          </select>
+          <p class="hint" id="format-note"></p>
+        </div>
+
+        <!-- Only shown when the chosen shape actually cuts something off. -->
+        <div class="k-field" id="pan-field" hidden>
+          <label for="pan">What to keep in frame</label>
+          <input type="range" id="pan" min="0" max="100" step="1" value="50">
+          <p class="ends"><span id="pan-a">Left</span><span id="pan-b">Right</span></p>
+          <p class="hint" id="pan-note"></p>
+        </div>
+      </section>
+
+      <!-- Pinned to the bottom of the window, so Export is always in reach
+           however long the panel above grows (walk, 2026-11-16). -->
+      <div class="side-foot" id="side-foot">
+        <button type="button" id="go" class="btn btn-primary btn-wide">Export</button>
+
+        <p class="k-error" id="error" hidden></p>
+
+        <!-- Exporting, done and failed: the kit's run part, right under Export. -->
+        <div id="run" hidden></div>
+
+        <div class="after-export">
+          <button type="button" id="clear" class="linky linky-plain">Start again</button>
+          <details class="mini" id="mini-settings">
+            <summary>Settings</summary>
+            <label class="check"><input type="checkbox" id="set-ask-remove"> Ask before removing a clip</label>
+          </details>
+        </div>
+      </div>
+
+    </aside>
+  </div>
+
+</div>
+
+<!-- How one clip meets the next, opened from a join's chip. -->
+<div class="join-picker" id="join-picker" role="menu" aria-label="How one clip meets the next" hidden>
+  <button type="button" class="jp-opt" role="menuitemradio" data-kind="cut"><span class="jp-pic jp-cut" aria-hidden="true"></span><span>Cut</span></button>
+  <button type="button" class="jp-opt" role="menuitemradio" data-kind="fade"><span class="jp-pic jp-fade" aria-hidden="true"></span><span>Fade</span></button>
+  <button type="button" class="jp-opt" role="menuitemradio" data-kind="slide"><span class="jp-pic jp-slide" aria-hidden="true"></span><span>Slide</span></button>
+</div>
+
+<!-- The moves and keys, behind the "?" by the timeline. -->
+<dialog id="help-keys" class="ask help-keys" aria-labelledby="help-keys-title">
+  <form method="dialog">
+    <p class="ask-title" id="help-keys-title">Moves and keys</p>
+    <dl class="keys">
+      <dt>Drag a block</dt><dd>Move it. Onto the tray to set it aside.</dd>
+      <dt>Drag a block's edge</dt><dd>Trim it.</dd>
+      <dt>Drag a tile in the tray</dt><dd>Put it on the timeline where you let go.</dd>
+      <dt>Drag along the strip</dt><dd>Move through the video.</dd>
+      <dt>S</dt><dd>Split at the playhead.</dd>
+      <dt>Pinch, or Ctrl and scroll</dt><dd>Zoom the timeline.</dd>
+      <dt>Space</dt><dd>Play and pause.</dd>
+      <dt>Left and right arrows</dt><dd>Step a tenth of a second. With Shift, a second.</dd>
+      <dt>Delete</dt><dd>Remove the selected block.</dd>
+      <dt>Cmd+Z, Shift+Cmd+Z</dt><dd>Undo, redo. Ctrl on Windows and Linux.</dd>
+    </dl>
+    <div class="row ask-buttons">
+      <button type="submit" value="close" class="btn btn-primary btn-tight" id="help-keys-close">Close</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Asked before everything is cleared. Undo can still bring it back. -->
+<dialog id="ask-clear" class="ask" aria-labelledby="ask-clear-title">
+  <form method="dialog">
+    <p class="ask-title" id="ask-clear-title">Start again?</p>
+    <p class="hint">This clears the timeline and the tray. Undo brings it back.</p>
+    <div class="row ask-buttons">
+      <button type="submit" value="cancel" class="btn btn-ghost btn-tight" id="ask-clear-cancel">Cancel</button>
+      <button type="submit" value="clear" class="btn btn-primary btn-tight" id="ask-clear-yes">Start again</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Asked before a clip leaves the timeline, unless the person said not to. -->
+<dialog id="ask-remove" class="ask" aria-labelledby="ask-remove-title">
+  <form method="dialog">
+    <p class="ask-title" id="ask-remove-title">Remove this clip from the timeline?</p>
+    <label class="check ask-check"><input type="checkbox" id="ask-remove-never"> Don't ask again</label>
+    <div class="row ask-buttons">
+      <button type="submit" value="cancel" class="btn btn-ghost btn-tight" id="ask-remove-cancel">Cancel</button>
+      <button type="submit" value="remove" class="btn btn-primary btn-tight" id="ask-remove-yes">Remove</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- The family footer, filled in by app.js. -->
+<footer></footer>
+
+<!-- plan.js first: it holds every piece of timeline arithmetic, and app.js is
+     written to have none of its own. One copy of the maths, not two. -->
+<script src="../plan.js"></script>
+<script src="kit/kit.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

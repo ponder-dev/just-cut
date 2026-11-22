@@ -1,0 +1,5 @@
+SETTLED, kept as the record of how the mark was taken apart. Working the film on
+its own first is what found two things: that the film alone is a short band at
+63% across by 39% down, and that the kerf is invisible at 32, so the cut cannot
+be what carries this icon small. Both are still true. The switches that produced
+these are live: CUT_SCISSORS=0 CUT_KERF=0 node scripts/make-icon.mjs
